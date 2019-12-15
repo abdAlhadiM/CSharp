@@ -2,359 +2,399 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace AVL
+public class AVLTree<T> :
+        IEnumerable<T>,
+        IEnumerable,
+        ICollection<T>,
+        ICollection,
+        IReadOnlyCollection<T>
 {
-    class AVLTree : IEnumerable<int>
+    private class Node
     {
-        private class Node
+        public Node left;
+        public Node right;
+        public Node parent;
+        public int height;
+        public int frequency;
+        public T val;
+
+        public Node(T val)
         {
-            public Node left;
-            public Node right;
-            public Node parent;
-            public int val;
-            public int frequency;
-            public int height;
-            public Node() { }
-            public Node(int val) : this(val, 0) { }
-
-            public Node(int val, int height)
-            {
-                this.val = val;
-                this.height = height;
-                left = right = null;
-                frequency = 1;
-            }
-
-            public Node Any() => left ?? right;
-            public bool IsLeaf() => left is null && right is null;
-            public bool IsFull() => left != null && right != null;
-            public bool HasChildren() => left != null && right != null;
-
-            public static implicit operator bool(Node node) => node != null;
+            this.val = val;
+            parent = right = left = null;
+            height = 0;
+            frequency = 1;
         }
 
-        private Node root;
+        public Node Any() => left ?? right;
+        public bool IsFull() => left != null && right != null;
+        public bool IsLeaf() => left is null && right is null;
+        public bool HasChildren() => left != null && right != null;
 
-        public int Count { get; private set; }
-
-        public void Add(int val)
+        public static implicit operator bool(Node node) => node != null;
+    }
+    public bool IsSynchronized => false;
+    public bool IsReadOnly => false;
+    public object SyncRoot
+    {
+        get
         {
-            var node = new Node(val);
-
-            if (root is null)
+            if (_syncRoot == null)
             {
-                root = node;
+                System.Threading.Interlocked.CompareExchange(ref _syncRoot, new object(), 0);
+            }
+            return _syncRoot;
+        }
+    }
+
+    public IComparer<T> Comparer => comparer;
+    public int Count { get; private set; }
+
+    private Node root;
+    private object _syncRoot;
+    private IComparer<T> comparer;
+
+
+    public AVLTree()
+    {
+        comparer = Comparer<T>.Default;
+    }
+
+    public AVLTree(IComparer<T> comparer)
+    {
+        this.comparer = comparer ?? Comparer<T>.Default;
+    }
+
+    private int Height(Node node) => node == null ? -1 : node.height;
+    private void UpdateHeight(Node node)
+    {
+        while (node)
+        {
+            node.height = 1 + Math.Max(Height(node.left), Height(node.right));
+            node = node.parent;
+        }
+    }
+    private int BalanceFactor(Node node) => Height(node.left) - Height(node.right);
+
+    private void Balance(Node node, bool isLeft)
+    {
+        while (node)
+        {
+            var bf = BalanceFactor(node);
+            var old = node;
+            //case right heavy
+            if (bf < -1)
+            {
+                //RL
+                if (isLeft)
+                {
+                    node = RotateRight(node.right);
+                    UpdateHeight(node);
+                    node = RotateLeft(node.parent);
+                    UpdateHeight(node);
+                }
+                //RR
+                else
+                {
+                    node = RotateLeft(node);
+                    UpdateHeight(node);
+                }
+            }
+            //case left heavy
+            else if (bf > 1)
+            {
+                //LL
+                if (isLeft)
+                {
+                    node = RotateRight(node);
+                    UpdateHeight(node);
+                }
+                //LR
+                else
+                {
+                    node = RotateLeft(node.left);
+                    UpdateHeight(node);
+                    node = RotateRight(node.parent);
+                    UpdateHeight(node);
+                }
+            }
+            if (old.parent) isLeft = old == old.parent.left;
+            node = node.parent;
+        }
+    }
+
+    private Node RotateLeft(Node node)
+    {
+        var other = node.right;
+
+        if (other)
+        {
+            node.right = other.left;
+            node.height = 1 + Math.Max(Height(node.left), Height(node.right));
+
+            if (other.left) other.left.parent = node;
+            other.parent = node.parent;
+            other.left = node;
+        }
+
+        if (!node.parent) root = other;
+        else if (node == node.parent.left) node.parent.left = other;
+        else node.parent.right = other;
+
+        node.parent = other;
+
+        return other;
+    }
+
+    private Node RotateRight(Node node)
+    {
+        var other = node.left;
+
+        if (other)
+        {
+            node.left = other.right;
+            node.height = 1 + Math.Max(Height(node.left), Height(node.right));
+
+            if (other.right) other.right.parent = node;
+            other.parent = node.parent;
+            other.right = node;
+        }
+
+
+        if (!node.parent) root = other;
+        else if (node == node.parent.left) node.parent.left = other;
+        else node.parent.right = other;
+
+        node.parent = other;
+        return other;
+    }
+
+    public void Add(T val)
+    {
+        var node = new Node(val);
+
+        if (root == null)
+        {
+            root = node;
+            Count++;
+            return;
+        }
+
+        var current = root;
+
+        while (true)
+        {
+            var cr = comparer.Compare(val, current.val);
+            if (cr > 0)
+            {
+                if (!current.right)
+                {
+                    current.right = node;
+                    break;
+                }
+                current = current.right;
+            }
+            else if (cr < 0)
+            {
+                if (!current.left)
+                {
+                    current.left = node;
+                    break;
+                }
+                current = current.left;
+            }
+            else
+            {
+                current.frequency++;
+                Count++;
                 return;
             }
-
-            var current = root;
-            while (true)
-            {
-                if (val > current.val)
-                {
-                    if (!current.right)
-                    {
-                        node.parent = current;
-                        current.right = node;
-                        break;
-                    }
-                    current = current.right;
-                }
-                else if (val < current.val)
-                {
-                    if (!current.left)
-                    {
-                        node.parent = current;
-                        current.left = node;
-                        break;
-                    }
-                    current = current.left;
-                }
-                else
-                {
-                    current.frequency++;
-                    Count++;
-                    return;
-                }
-            }
-            Count++;
-            UpdateHeight(current);
-            Balance(current, node == current.left);
         }
 
-        private int GetHeight(Node node) => node is null ? -1 : node.height;
-        private int BalanceFactor(Node node) => GetHeight(node.left) - GetHeight(node.right);
-        private void UpdateHeight(Node node)
+        node.parent = current;
+        Count++;
+        UpdateHeight(current);
+        Balance(current, node == current.left);
+    }
+    public bool Remove(T val)
+    {
+        var node = Get(val);
+
+        if (!node)
+            return false;
+
+        if (--Count == 0)
         {
-            while (node)
-            {
-                node.height = 1 + Math.Max(GetHeight(node.left), GetHeight(node.right));
-                node = node.parent;
-            }
+            root = null;
+            return true;
+        }
+        if (--node.frequency > 0)
+            return true;
+
+
+        if (node.IsFull())
+        {
+            var min = GetMin(node.right);
+            node.val = min.val;
+            node.frequency = min.frequency;
+            node = min;
         }
 
-        private void Balance(Node node, bool isLeft)
+        var isLeft = node == node.parent.left;
+
+        if (node.IsLeaf())
         {
-            while (node)
+            if (isLeft)
             {
-                var old = node;
-                var bf = BalanceFactor(node);
-                //case right heavy
-                if (bf < -1)
-                {
-                    //RL
-                    if (isLeft)
-                    {
-                        node = RotateRight(node.right);
-                        UpdateHeight(node);
-                        node = RotateLeft(node.parent);
-                        UpdateHeight(node);
-                    }
-                    //RR
-                    else
-                    {
-                        node = RotateLeft(node);
-                        UpdateHeight(node);
-                    }
-                }
-                //case left heavy
-                else if (bf > 1)
-                {
-                    //LL
-                    if (isLeft)
-                    {
-                        node = RotateRight(node);
-                        UpdateHeight(node);
-                    }
-                    //LR
-                    else
-                    {
-                        node = RotateLeft(node.left);
-                        UpdateHeight(node);
-                        node = RotateRight(node.parent);
-                        UpdateHeight(node);
-                    }
-                }
-                if (old.parent) isLeft = old == old.parent.left;
-                node = node.parent;
+                node.parent.left = null;
+            }
+            else
+            {
+                node.parent.right = null;
+            }
+        }
+        else
+        {
+            var child = node.Any();
+            child.parent = node.parent;
+            if (isLeft)
+            {
+                node.parent.left = child;
+            }
+            else
+            {
+                node.parent.right = child;
             }
         }
 
-        private Node RotateRight(Node node)
+        return true;
+    }
+
+    public bool Contains(T val)
+    {
+        return Get(val);
+    }
+
+    private Node Get(T val)
+    {
+        var current = root;
+        while (current)
         {
-            var other = node.left;
-            if (other)
-            {
+            var cr = comparer.Compare(val, current.val);
+            if (cr == 0) break;
+            current = cr > 0 ? current.right :
+                               current.left;
+        }
+        return current;
+    }
 
-                node.left = other.right;
-                node.height = 1 + Math.Max(GetHeight(node.left), GetHeight(node.right));
+    private Node GetMin(Node node)
+    {
+        while (node.left)
+        {
+            node = node.left;
+        }
+        return node;
+    }
+    private Node GetMax(Node node)
+    {
+        while (node.right)
+        {
+            node = node.right;
+        }
+        return node;
+    }
 
-                if (other.right) other.right.parent = node;
+    public T GetMin()
+    {
+        if (root is null)
+            throw new InvalidOperationException();
+        return GetMin(root).val;
+    }
 
-                other.parent = node.parent;
-                other.right = node;
+    public T GetMax()
+    {
+        if (root is null)
+            throw new InvalidOperationException();
+        return GetMax(root).val;
+    }
 
-            }
+    public void CopyTo(Array array, int index)
+    {
+        if (array != null && array.Rank != 1)
+        {
+            throw new InvalidOperationException();
+        }
+        if (!(array is T[] arr))
+        {
+            throw new ArrayTypeMismatchException();
+        }
+        CopyTo(arr, index);
+    }
 
-            if (!node.parent) root = other;
-            else if (node == node.parent.left)
-                node.parent.left = other;
-            else node.parent.right = other;
+    public void CopyTo(T[] array, int arrayIndex)
+    {
+        if (array == null)
+            throw new ArgumentNullException();
+        if (arrayIndex < 0 || arrayIndex >= array.Length)
+            throw new InvalidOperationException();
+        if (array.Length - arrayIndex < Count)
+            throw new InvalidOperationException();
+        foreach (var item in this)
+        {
+            array[arrayIndex++] = item;
+        }
+    }
 
-            node.parent = other;
-            return other;
+    public void Clear()
+    {
+        root = null;
+        Count = 0;
+    }
+
+    public IEnumerator<T> GetEnumerator()
+    {
+        return new InorderEnumerator(this);
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    private class InorderEnumerator
+        : IEnumerator<T>,
+          IEnumerator,
+          IEnumerable<T>,
+          IEnumerable
+    {
+        private readonly AVLTree<T> avlTree;
+
+        public InorderEnumerator(AVLTree<T> avlTree)
+        {
+            this.avlTree = avlTree;
         }
 
-        private Node RotateLeft(Node node)
+        public IEnumerator<T> GetEnumerator()
         {
-            var other = node.right;
-
-            if (other)
-            {
-                node.right = other.left;
-                node.height = 1 + Math.Max(GetHeight(node.left), GetHeight(node.right));
-
-                if (other.left) other.left.parent = node;
-
-                other.parent = node.parent;
-                other.left = node;
-            }
-
-            if (!node.parent) root = other;
-            else if (node == node.parent.left)
-                node.parent.left = other;
-            else node.parent.right = other;
-
-
-            node.parent = other;
-            return other;
+            return this;
         }
 
-        public bool Contains(int val)
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public T Current { get; private set; }
+        object IEnumerator.Current => Current;
+
+        public bool MoveNext()
         {
-            return Get(val);
-        }
-
-        private Node Get(int val)
-        {
-            var current = root;
-            while (current && val != current.val)
-            {
-                current = val > current.val ?
-                                    current.right :
-                                    current.left;
-            }
-            return current;
-        }
-
-        public int GetMin()
-        {
-            var node = GetMin(root);
-            if (node is null)
-                throw new InvalidOperationException();
-            return node.val;
-        }
-        private Node GetMin(Node node)
-        { 
-            while (node.left)
-            {
-                node = node.left;
-            }
-            return node;
-        }
-
-        public bool Remove(int val)
-        {
-            var node = Get(val);
-          
-            if (node)
-            {
-                if (--node.frequency > 0)
-                {
-                    return true;
-                }
-
-                if (node.IsFull())
-                {
-                    var min = GetMin(node.right);
-                    node.val = min.val;
-                    node.frequency = min.frequency;
-                    node = min;
-                }
-
-                if (node.IsLeaf())
-                {
-                    if (node.parent.left == node)
-                    {
-                        node.parent.left = null;
-                    }
-                    else
-                        node.parent.right = null;
-                }
-                else
-                {
-                    var child = node.Any();
-                    node.parent = child;
-                    child.parent = node.parent;
-
-                }
-                node.parent.height = 1 + Math.Max(GetHeight(node.parent.left), GetHeight(node.parent.right));
-                Count--;
-                return true;
-            }
             return false;
         }
 
-        public IEnumerator<int> GetEnumerator()
+        public void Reset()
         {
-            return new InorderEnumerator(this);
-        }
-         
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        public IEnumerable<IEnumerable<int>> Levels()
-        {
-            var queue = new Queue<Node>();
-            queue.Enqueue(root);
-            while (queue.Count != 0)
-            {
-                var level = new List<int>();
-                var n = queue.Count;
-                while (n-- > 0)
-                {
-                    var current = queue.Dequeue();
-                    if (current.left) queue.Enqueue(current.left);
-                    if (current.right) queue.Enqueue(current.right);
-                    level.Add(current.val);
-                }
-                yield return level;
-            }
         }
 
-        public class InorderEnumerator :
-                        IEnumerable<int>,
-                        IEnumerable,
-                        IEnumerator<int>,
-                        IEnumerator
+        public void Dispose()
         {
-            private readonly AVLTree binarySearchTree;
-            private readonly Stack<Node> stack;
-            private readonly int threadId;
-            private Node root;
-            private int freq;
-            public InorderEnumerator(AVLTree binarySearchTree)
-            {
-                this.binarySearchTree = binarySearchTree ?? throw new ArgumentNullException(nameof(binarySearchTree));
-                stack = new Stack<Node>();
-                threadId = Environment.CurrentManagedThreadId;
-                root = binarySearchTree.root;
-                freq = 0;
-            }
 
-
-            public IEnumerator<int> GetEnumerator()
-            {
-                if (Environment.CurrentManagedThreadId != threadId)
-                    return new InorderEnumerator(binarySearchTree);
-                return this;
-            }
-
-            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-            public int Current { get; private set; }
-
-            object IEnumerator.Current => Current;
-
-            public void Dispose()
-            {
-            }
-
-            public bool MoveNext()
-            {
-                if (freq > 0)
-                {
-                    freq--;
-                    return true;
-                }
-                while (root)
-                {
-                    stack.Push(root);
-                    root = root.left;
-                }
-                if (stack.Count == 0) return false;
-
-                root = stack.Pop();
-                Current = root.val;
-                freq = root.frequency - 1;
-                root = root.right;
-
-                return true;
-            }
-
-            public void Reset()
-            {
-                
-            }
         }
     }
 }
