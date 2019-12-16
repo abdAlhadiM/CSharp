@@ -375,14 +375,24 @@ public class AVLTree<T> :
           IEnumerable
     {
         private readonly AVLTree<T> avlTree;
-
+        private readonly Stack<Node> stack;
+        private readonly int threadId;
+        private Node root;
+        private int freq;
         public InorderEnumerator(AVLTree<T> avlTree)
         {
+
             this.avlTree = avlTree;
+            root = avlTree.root;
+            stack = new Stack<Node>();
+            threadId = Environment.CurrentManagedThreadId;
+            freq = 0;
         }
 
         public IEnumerator<T> GetEnumerator()
         {
+            if (threadId != Environment.CurrentManagedThreadId)
+                return new InorderEnumerator(avlTree);
             return this;
         }
 
@@ -393,17 +403,30 @@ public class AVLTree<T> :
 
         public bool MoveNext()
         {
-            return false;
+            if (--freq > 0)
+            {
+                return true;
+            }
+            while (root)
+            {
+                stack.Push(root);
+                root = root.left;
+            }
+            if (stack.Count == 0) return false;
+            root = stack.Pop();
+            Current = root.val;
+            freq = root.frequency;
+            root = root.right;
+            return true;
         }
 
         public void Reset()
         {
-
+            root = avlTree.root;
         }
 
         public void Dispose()
         {
-
         }
     }
 }
