@@ -3,11 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 
 public class AVLTree<T> :
-        IEnumerable<T>,
-        IEnumerable,
-        ICollection<T>,
-        ICollection,
-        IReadOnlyCollection<T>
+     IEnumerable<T>,
+     IEnumerable,
+     ICollection<T>,
+     ICollection,
+     IReadOnlyCollection<T>
 {
     private class Node
     {
@@ -240,11 +240,9 @@ public class AVLTree<T> :
             node = min;
         }
 
-        var isLeft = node == node.parent.left;
-
         if (node.IsLeaf())
         {
-            if (isLeft)
+            if (node == node.parent.left)
             {
                 node.parent.left = null;
             }
@@ -252,10 +250,19 @@ public class AVLTree<T> :
             {
                 node.parent.right = null;
             }
+            UpdateHeight(node.parent);
         }
         else
         {
             var child = node.Any();
+            if (node == root)
+            {
+                root = child;
+                child.parent = null;
+                UpdateHeight(root);
+                return true;
+            }
+            var isLeft = node == node.parent.left;
             child.parent = node.parent;
             if (isLeft)
             {
@@ -265,6 +272,8 @@ public class AVLTree<T> :
             {
                 node.parent.right = child;
             }
+            UpdateHeight(node.parent);
+            Balance(node.parent, !isLeft);
         }
 
         return true;
